@@ -135,43 +135,78 @@
                     if (data.data.length === 0) {
                         container.innerHTML = '<p class="text-muted">No users found. Add your first user above.</p>';
                     } else {
-                        container.innerHTML = `
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Username</th>
-                                        <th>Status</th>
-                                        <th>Created</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${data.data.map(user => `
-                                        <tr>
-                                            <td><strong>${user.username}</strong></td>
-                                            <td>
-                                                <span class="badge badge-${user.status === 'active' ? 'success' : 'error'}">
-                                                    ${user.status}
-                                                </span>
-                                            </td>
-                                            <td>${user.created || 'N/A'}</td>
-                                            <td class="actions">
-                                                ${user.status === 'active' ? `
-                                                    <button class="btn btn-primary btn-sm" onclick="downloadConfig('${user.username}')">
-                                                        📥 Download
-                                                    </button>
-                                                    <button class="btn btn-danger btn-sm" onclick="revokeUser('${user.username}')">
-                                                        🚫 Revoke
-                                                    </button>
-                                                ` : `
-                                                    <span class="text-muted">Revoked</span>
-                                                `}
-                                            </td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
+                        // Create table manually to avoid HTML escaping issues
+                        const table = document.createElement('table');
+                        table.className = 'table';
+                        
+                        const thead = document.createElement('thead');
+                        thead.innerHTML = `
+                            <tr>
+                                <th>Username</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
                         `;
+                        table.appendChild(thead);
+                        
+                        const tbody = document.createElement('tbody');
+                        
+                        data.data.forEach(user => {
+                            const tr = document.createElement('tr');
+                            
+                            // Username cell
+                            const tdName = document.createElement('td');
+                            const strong = document.createElement('strong');
+                            strong.textContent = user.username; // Use textContent to avoid HTML escaping
+                            tdName.appendChild(strong);
+                            tr.appendChild(tdName);
+                            
+                            // Status cell
+                            const tdStatus = document.createElement('td');
+                            const badge = document.createElement('span');
+                            badge.className = `badge badge-${user.status === 'active' ? 'success' : 'error'}`;
+                            badge.textContent = user.status;
+                            tdStatus.appendChild(badge);
+                            tr.appendChild(tdStatus);
+                            
+                            // Created cell
+                            const tdCreated = document.createElement('td');
+                            tdCreated.textContent = user.created || 'N/A';
+                            tr.appendChild(tdCreated);
+                            
+                            // Actions cell
+                            const tdActions = document.createElement('td');
+                            tdActions.className = 'actions';
+                            
+                            if (user.status === 'active') {
+                                const btnDownload = document.createElement('button');
+                                btnDownload.className = 'btn btn-primary btn-sm';
+                                btnDownload.innerHTML = '📥 Download';
+                                btnDownload.onclick = () => downloadConfig(user.username);
+                                
+                                const btnRevoke = document.createElement('button');
+                                btnRevoke.className = 'btn btn-danger btn-sm';
+                                btnRevoke.innerHTML = '🚫 Revoke';
+                                btnRevoke.onclick = () => revokeUser(user.username);
+                                
+                                tdActions.appendChild(btnDownload);
+                                tdActions.appendChild(document.createTextNode(' '));
+                                tdActions.appendChild(btnRevoke);
+                            } else {
+                                const span = document.createElement('span');
+                                span.className = 'text-muted';
+                                span.textContent = 'Revoked';
+                                tdActions.appendChild(span);
+                            }
+                            
+                            tr.appendChild(tdActions);
+                            tbody.appendChild(tr);
+                        });
+                        
+                        table.appendChild(tbody);
+                        container.innerHTML = '';
+                        container.appendChild(table);
                     }
                 } else {
                     container.innerHTML = `<p class="text-error">Error: ${data.message || data.error || 'Failed to load users'}</p>`;

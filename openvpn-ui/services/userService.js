@@ -4,11 +4,23 @@ const fs = require('fs').promises;
 const path = require('path');
 
 /**
+ * Strip ANSI color codes from string
+ * @param {string} str - String with ANSI codes
+ * @returns {string} - Clean string
+ */
+function stripAnsiCodes(str) {
+  if (!str) return '';
+  // Remove all ANSI escape codes
+  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1B\[/g, '');
+}
+
+/**
  * Validate username format
  * @param {string} username - Username to validate
  * @returns {boolean}
  */
 function isValidUsername(username) {
+  if (!username) return false;
   return /^[a-zA-Z0-9-_]+$/.test(username);
 }
 
@@ -19,39 +31,48 @@ function isValidUsername(username) {
  */
 function parseUserList(output) {
   const users = [];
-  const lines = output.split('\n');
+  
+  // Strip ANSI codes first
+  const cleanOutput = stripAnsiCodes(output);
+  const lines = cleanOutput.split('\n');
   
   let inDataSection = false;
   
   for (const line of lines) {
-    const trimmed = line.trim();
+    let trimmed = line.trim();
     
     // Skip empty lines
     if (!trimmed) continue;
     
-    // Skip separator lines
-    if (trimmed.match(/^[=:+\-|]+$/)) continue;
+    // Skip separator lines (===, ---, :::, +++)
+    if (trimmed.match(/^[=:+\-|]{3,}$/)) continue;
     
-    // Skip header lines
-    if (trimmed.toLowerCase().includes('name') && trimmed.toLowerCase().includes('remote')) {
+    // Detect header line
+    const lowerLine = trimmed.toLowerCase();
+    if ((lowerLine.includes('name') || lowerLine.includes('user')) && 
+        (lowerLine.includes('remote') || lowerLine.includes('public') || lowerLine.includes('creation'))) {
       inDataSection = true;
       continue;
     }
     
     // Skip footer/info lines
-    if (trimmed.includes('pivpn') || trimmed.includes('client') || trimmed.includes('Total')) {
+    if (trimmed.includes('pivpn') || lowerLine.includes('total') || 
+        lowerLine.includes('qrcode') || trimmed.startsWith('::')) {
       continue;
     }
     
-    if (inDataSection || trimmed.split(/\s+/).length >= 2) {
-      // Split by whitespace
+    if (inDataSection) {
+      // Split by whitespace and filter empty
       const parts = trimmed.split(/\s+/).filter(p => p.length > 0);
       
       if (parts.length === 0) continue;
       
-      const username = parts[0];
+      let username = parts[0];
       
-      // Validate username - skip if it contains special chars or is too short
+      // Strip any remaining special characters
+      username = username.replace(/[^a-zA-Z0-9-_]/g, '');
+      
+      // Validate username - skip if invalid
       if (!username || username.length < 2 || !isValidUsername(username)) {
         continue;
       }

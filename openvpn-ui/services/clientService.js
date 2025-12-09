@@ -157,32 +157,44 @@ async function getConnectedClients() {
 }
 
 /**
+ * Strip ANSI color codes from string
+ */
+function stripAnsiCodes(str) {
+  if (!str) return '';
+  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1B\[/g, '');
+}
+
+/**
  * Parse pivpn -c command output as fallback
  * @param {string} output - Raw output from pivpn -c
  * @returns {Object}
  */
 function parseFromPivpnCommand(output) {
   const clients = [];
-  const lines = output.split('\n');
+  
+  // Strip ANSI codes
+  const cleanOutput = stripAnsiCodes(output);
+  const lines = cleanOutput.split('\n');
   
   let inDataSection = false;
   
   for (const line of lines) {
-    const trimmed = line.trim();
+    let trimmed = line.trim();
     
     if (!trimmed) continue;
     
     // Skip separator lines
-    if (trimmed.match(/^[=:+\-|]+$/)) continue;
+    if (trimmed.match(/^[=:+\-|]{3,}$/)) continue;
     
     // Detect header
-    if (trimmed.toLowerCase().includes('name') || trimmed.toLowerCase().includes('common')) {
+    const lowerLine = trimmed.toLowerCase();
+    if (lowerLine.includes('name') || lowerLine.includes('common')) {
       inDataSection = true;
       continue;
     }
     
     // Skip footer lines
-    if (trimmed.includes('pivpn') || trimmed.toLowerCase().includes('total')) {
+    if (trimmed.includes('pivpn') || lowerLine.includes('total') || trimmed.startsWith('::')) {
       continue;
     }
     
@@ -191,7 +203,10 @@ function parseFromPivpnCommand(output) {
       
       if (parts.length === 0) continue;
       
-      const username = parts[0];
+      let username = parts[0];
+      
+      // Clean username
+      username = username.replace(/[^a-zA-Z0-9-_]/g, '');
       
       // Validate username
       if (!username || username.length < 2 || !/^[a-zA-Z0-9-_]+$/.test(username)) {

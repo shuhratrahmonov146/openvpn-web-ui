@@ -137,30 +137,56 @@
                     if (count === 0) {
                         clientsDiv.innerHTML = '<p class="text-muted">No clients currently connected</p>';
                     } else {
-                        clientsDiv.innerHTML = `
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Username</th>
-                                        <th>Real IP</th>
-                                        <th>Virtual IP</th>
-                                        <th>Data In</th>
-                                        <th>Data Out</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${data.data.map(client => `
-                                        <tr>
-                                            <td><strong>${client.username}</strong></td>
-                                            <td>${client.realIp || 'N/A'}</td>
-                                            <td>${client.virtualIp || 'N/A'}</td>
-                                            <td>${client.bytesIn || 'N/A'}</td>
-                                            <td>${client.bytesOut || 'N/A'}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
+                        // Create table manually
+                        const table = document.createElement('table');
+                        table.className = 'table';
+                        
+                        const thead = document.createElement('thead');
+                        thead.innerHTML = `
+                            <tr>
+                                <th>Username</th>
+                                <th>Real IP</th>
+                                <th>Virtual IP</th>
+                                <th>Data In</th>
+                                <th>Data Out</th>
+                            </tr>
                         `;
+                        table.appendChild(thead);
+                        
+                        const tbody = document.createElement('tbody');
+                        
+                        data.data.forEach(client => {
+                            const tr = document.createElement('tr');
+                            
+                            const tdUsername = document.createElement('td');
+                            const strong = document.createElement('strong');
+                            strong.textContent = client.username;
+                            tdUsername.appendChild(strong);
+                            
+                            const tdRealIp = document.createElement('td');
+                            tdRealIp.textContent = client.realIp || 'N/A';
+                            
+                            const tdVirtualIp = document.createElement('td');
+                            tdVirtualIp.textContent = client.virtualIp || 'N/A';
+                            
+                            const tdBytesIn = document.createElement('td');
+                            tdBytesIn.textContent = client.bytesIn || 'N/A';
+                            
+                            const tdBytesOut = document.createElement('td');
+                            tdBytesOut.textContent = client.bytesOut || 'N/A';
+                            
+                            tr.appendChild(tdUsername);
+                            tr.appendChild(tdRealIp);
+                            tr.appendChild(tdVirtualIp);
+                            tr.appendChild(tdBytesIn);
+                            tr.appendChild(tdBytesOut);
+                            
+                            tbody.appendChild(tr);
+                        });
+                        
+                        table.appendChild(tbody);
+                        clientsDiv.innerHTML = '';
+                        clientsDiv.appendChild(table);
                     }
                 } else {
                     document.getElementById('connectedClients').innerHTML = `<p class="text-muted">${data.message || 'No clients connected'}</p>`;
