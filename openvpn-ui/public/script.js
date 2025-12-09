@@ -22,7 +22,7 @@ async function checkServerStatus() {
         const statusIndicator = document.getElementById('serverStatus');
         const statusText = statusIndicator.querySelector('.status-text');
         
-        if (data.success && data.active) {
+        if (data.success && data.data && data.data.active) {
             statusIndicator.classList.add('online');
             statusIndicator.classList.remove('offline');
             statusText.textContent = 'Online';

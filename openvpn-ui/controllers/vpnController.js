@@ -1,4 +1,6 @@
-const { run, runSudo } = require('../services/execService');
+const userService = require('../services/userService');
+const clientService = require('../services/clientService');
+const statusService = require('../services/statusService');
 const config = require('../config');
 const path = require('path');
 const fs = require('fs').promises;
@@ -8,39 +10,24 @@ const fs = require('fs').promises;
  */
 async function listUsers(req, res) {
   try {
-    const output = await run('pivpn -l');
+    const result = await userService.listUsers();
     
-    // Parse the output to extract user information
-    const lines = output.split('\n').filter(line => line.trim());
-    const users = [];
-    
-    // Skip header lines and parse user data
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      
-      // Look for lines with user data (typically contains username and dates)
-      if (line && !line.includes('Name') && !line.includes('===') && !line.includes('pivpn')) {
-        const parts = line.split(/\s+/);
-        if (parts.length >= 1) {
-          users.push({
-            name: parts[0],
-            status: line.toLowerCase().includes('revoked') ? 'revoked' : 'active',
-            raw: line
-          });
-        }
-      }
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.message
+      });
     }
     
     res.json({
       success: true,
-      users: users,
-      rawOutput: output
+      data: result.data
     });
   } catch (error) {
-    console.error('Error listing users:', error);
+    console.error('[listUsers] Error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to list users'
+      message: 'Failed to list users'
     });
   }
 }
@@ -52,43 +39,25 @@ async function addUser(req, res) {
   try {
     const { username } = req.body;
     
-    if (!username || !username.trim()) {
+    const result = await userService.createUser(username);
+    
+    if (!result.success) {
       return res.status(400).json({
         success: false,
-        error: 'Username is required'
-      });
-    }
-    
-    // Validate username (alphanumeric and hyphens only)
-    if (!/^[a-zA-Z0-9-_]+$/.test(username)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Username must contain only letters, numbers, hyphens, and underscores'
-      });
-    }
-    
-    // Use -p flag for passwordless (non-interactive) client creation
-    const output = await run(`pivpn -a -n ${username} -p`);
-    
-    // Check if user already exists by examining output
-    if (output && output.toLowerCase().includes('already exists')) {
-      return res.status(400).json({
-        success: false,
-        message: 'User already exists'
+        message: result.message
       });
     }
     
     res.json({
       success: true,
-      message: `User ${username} created successfully`,
-      username: username,
-      output: output
+      message: result.message,
+      data: result.data
     });
   } catch (error) {
-    console.error('Error adding user:', error);
+    console.error('[addUser] Error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to add user'
+      message: 'Failed to add user'
     });
   }
 }
@@ -100,25 +69,25 @@ async function revokeUser(req, res) {
   try {
     const { username } = req.body;
     
-    if (!username || !username.trim()) {
+    const result = await userService.revokeUser(username);
+    
+    if (!result.success) {
       return res.status(400).json({
         success: false,
-        error: 'Username is required'
+        message: result.message
       });
     }
     
-    const output = await run(`pivpn -r ${username} -y`);
-    
     res.json({
       success: true,
-      message: `User ${username} revoked successfully`,
-      output: output
+      message: result.message,
+      data: result.data
     });
   } catch (error) {
-    console.error('Error revoking user:', error);
+    console.error('[revokeUser] Error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to revoke user'
+      message: 'Failed to revoke user'
     });
   }
 }
@@ -133,7 +102,7 @@ async function downloadConfig(req, res) {
     if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
-        error: 'Username is required'
+        message: 'Username is required'
       });
     }
     
@@ -141,7 +110,15 @@ async function downloadConfig(req, res) {
     if (name.includes('..') || name.includes('/') || name.includes('\\')) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid username'
+        message: 'Invalid username'
+      });
+    }
+    
+    // Validate username format
+    if (!userService.isValidUsername(name)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid username format'
       });
     }
     
@@ -153,26 +130,26 @@ async function downloadConfig(req, res) {
     } catch (error) {
       return res.status(404).json({
         success: false,
-        error: 'Configuration file not found'
+        message: 'Configuration file not found'
       });
     }
     
     res.download(configPath, `${name}.ovpn`, (err) => {
       if (err) {
-        console.error('Error downloading file:', err);
+        console.error('[downloadConfig] Error:', err);
         if (!res.headersSent) {
           res.status(500).json({
             success: false,
-            error: 'Failed to download configuration file'
+            message: 'Failed to download configuration file'
           });
         }
       }
     });
   } catch (error) {
-    console.error('Error downloading config:', error);
+    console.error('[downloadConfig] Error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to download configuration'
+      message: 'Failed to download configuration'
     });
   }
 }
@@ -182,19 +159,26 @@ async function downloadConfig(req, res) {
  */
 async function getLogs(req, res) {
   try {
-    const lines = req.query.lines || 200;
-    const output = await runSudo(`journalctl -u ${config.OPENVPN_SERVICE} --no-pager -n ${lines}`);
+    const lines = parseInt(req.query.lines) || 200;
+    const result = await statusService.getServiceLogs(lines);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.message
+      });
+    }
     
     res.json({
       success: true,
-      logs: output,
-      lines: lines
+      data: result.data,
+      lines: result.lines
     });
   } catch (error) {
-    console.error('Error getting logs:', error);
+    console.error('[getLogs] Error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to retrieve logs'
+      message: 'Failed to retrieve logs'
     });
   }
 }
@@ -204,18 +188,24 @@ async function getLogs(req, res) {
  */
 async function restartService(req, res) {
   try {
-    const output = await runSudo(`systemctl restart ${config.OPENVPN_SERVICE}`);
+    const result = await statusService.restartService();
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.message
+      });
+    }
     
     res.json({
       success: true,
-      message: 'OpenVPN service restarted successfully',
-      output: output
+      message: result.message
     });
   } catch (error) {
-    console.error('Error restarting service:', error);
+    console.error('[restartService] Error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to restart service'
+      message: 'Failed to restart service'
     });
   }
 }
@@ -225,20 +215,20 @@ async function restartService(req, res) {
  */
 async function getStatus(req, res) {
   try {
-    const output = await run(`systemctl is-active ${config.OPENVPN_SERVICE}`);
-    const isActive = output.trim() === 'active';
+    const result = await statusService.getServiceStatus();
     
     res.json({
       success: true,
-      status: isActive ? 'active' : 'inactive',
-      active: isActive
+      data: result.data
     });
   } catch (error) {
-    // Service might be inactive
+    console.error('[getStatus] Error:', error);
     res.json({
       success: true,
-      status: 'inactive',
-      active: false
+      data: {
+        status: 'unknown',
+        active: false
+      }
     });
   }
 }
@@ -248,38 +238,25 @@ async function getStatus(req, res) {
  */
 async function getConnectedClients(req, res) {
   try {
-    const output = await run('pivpn -c');
+    const result = await clientService.getConnectedClients();
     
-    // Parse connected clients
-    const lines = output.split('\n').filter(line => line.trim());
-    const clients = [];
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      
-      // Skip header and empty lines
-      if (line && !line.includes('Name') && !line.includes('===') && !line.includes('pivpn')) {
-        const parts = line.split(/\s+/);
-        if (parts.length >= 1) {
-          clients.push({
-            name: parts[0],
-            raw: line
-          });
-        }
-      }
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.message
+      });
     }
     
     res.json({
       success: true,
-      clients: clients,
-      count: clients.length,
-      rawOutput: output
+      data: result.data,
+      count: result.data.length
     });
   } catch (error) {
-    console.error('Error getting connected clients:', error);
+    console.error('[getConnectedClients] Error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to get connected clients'
+      message: 'Failed to get connected clients'
     });
   }
 }
@@ -289,33 +266,24 @@ async function getConnectedClients(req, res) {
  */
 async function getServerInfo(req, res) {
   try {
-    // Get public IP
-    let publicIp = 'Unknown';
-    try {
-      publicIp = await run('curl -s ifconfig.me');
-    } catch (e) {
-      console.log('Could not retrieve public IP');
+    const result = await statusService.getServerInfo();
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.message
+      });
     }
-    
-    // Get hostname
-    const hostname = await run('hostname');
-    
-    // Get uptime
-    const uptime = await run('uptime -p');
     
     res.json({
       success: true,
-      info: {
-        publicIp: publicIp.trim(),
-        hostname: hostname.trim(),
-        uptime: uptime.trim()
-      }
+      data: result.data
     });
   } catch (error) {
-    console.error('Error getting server info:', error);
+    console.error('[getServerInfo] Error:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to get server information'
+      message: 'Failed to get server information'
     });
   }
 }

@@ -110,10 +110,14 @@
                 const response = await fetch('/api/server-info');
                 const data = await response.json();
                 
-                if (data.success) {
-                    document.getElementById('publicIp').textContent = data.info.publicIp;
-                    document.getElementById('hostname').textContent = data.info.hostname;
-                    document.getElementById('uptime').textContent = data.info.uptime;
+                if (data.success && data.data) {
+                    document.getElementById('publicIp').textContent = data.data.publicIp || 'Unknown';
+                    document.getElementById('hostname').textContent = data.data.hostname || 'Unknown';
+                    document.getElementById('uptime').textContent = data.data.uptime || 'Unknown';
+                } else {
+                    document.getElementById('publicIp').textContent = 'Error';
+                    document.getElementById('hostname').textContent = 'Error';
+                    document.getElementById('uptime').textContent = 'Error';
                 }
             } catch (error) {
                 console.error('Error loading server info:', error);
@@ -125,7 +129,7 @@
                 const response = await fetch('/api/clients');
                 const data = await response.json();
                 
-                if (data.success) {
+                if (data.success && data.data) {
                     const count = data.count || 0;
                     document.getElementById('connectedCount').textContent = count;
                     
@@ -134,11 +138,32 @@
                         clientsDiv.innerHTML = '<p class="text-muted">No clients currently connected</p>';
                     } else {
                         clientsDiv.innerHTML = `
-                            <ul class="client-list">
-                                ${data.clients.map(client => `<li>✓ ${client.name}</li>`).join('')}
-                            </ul>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Real IP</th>
+                                        <th>Virtual IP</th>
+                                        <th>Data In</th>
+                                        <th>Data Out</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.data.map(client => `
+                                        <tr>
+                                            <td><strong>${client.username}</strong></td>
+                                            <td>${client.realIp || 'N/A'}</td>
+                                            <td>${client.virtualIp || 'N/A'}</td>
+                                            <td>${client.bytesIn || 'N/A'}</td>
+                                            <td>${client.bytesOut || 'N/A'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
                         `;
                     }
+                } else {
+                    document.getElementById('connectedClients').innerHTML = `<p class="text-muted">${data.message || 'No clients connected'}</p>`;
                 }
             } catch (error) {
                 console.error('Error loading connected clients:', error);
@@ -163,7 +188,7 @@
                         loadDashboard();
                     }, 2000);
                 } else {
-                    showToast('Failed to restart service: ' + data.error, 'error');
+                    showToast('Failed to restart service: ' + (data.message || data.error), 'error');
                 }
             } catch (error) {
                 showToast('Error: ' + error.message, 'error');
