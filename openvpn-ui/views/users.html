@@ -114,7 +114,7 @@
                     document.getElementById('addUserForm').reset();
                     loadUsers();
                 } else {
-                    showToast('Error: ' + data.error, 'error');
+                    showToast('Error: ' + (data.error || data.message || 'Unknown error'), 'error');
                 }
             } catch (error) {
                 showToast('Network error: ' + error.message, 'error');

@@ -67,11 +67,21 @@ async function addUser(req, res) {
       });
     }
     
-    const output = await run(`pivpn -a -n ${username}`);
+    // Use -p flag for passwordless (non-interactive) client creation
+    const output = await run(`pivpn -a -n ${username} -p`);
+    
+    // Check if user already exists by examining output
+    if (output && output.toLowerCase().includes('already exists')) {
+      return res.status(400).json({
+        success: false,
+        message: 'User already exists'
+      });
+    }
     
     res.json({
       success: true,
       message: `User ${username} created successfully`,
+      username: username,
       output: output
     });
   } catch (error) {
