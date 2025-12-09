@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs - OpenVPN UI</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>🔒 OpenVPN Management UI</h1>
+            </div>
+            <div class="nav-links">
+                <a href="/">Dashboard</a>
+                <a href="/users">Users</a>
+                <a href="/logs" class="active">Logs</a>
+                <a href="/logout" style="color: var(--danger-color);">🚪 Logout</a>
+            </div>
+            <div class="server-status">
+                <span class="status-label">Server:</span>
+                <span class="status-indicator" id="serverStatus">
+                    <span class="dot"></span>
+                    <span class="status-text">Checking...</span>
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section>
+            <h2>OpenVPN Service Logs</h2>
+            
+            <!-- Logs Control Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Log Settings</h3>
+                    <div class="form-inline">
+                        <label for="logLines">Lines to show:</label>
+                        <select id="logLines" class="form-control">
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="200" selected>200</option>
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="loadLogs()">
+                            🔄 Refresh
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="toggleAutoRefresh()">
+                            <span id="autoRefreshText">▶️ Auto-Refresh</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Display Card -->
+            <div class="card">
+                <h3>Log Output</h3>
+                <div id="logsContainer" class="logs-container">
+                    <p class="text-muted">Loading logs...</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>OpenVPN Management UI | Built with Node.js & Express</p>
+        </div>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="../script.js"></script>
+    <script>
+        let autoRefreshInterval = null;
+        let autoRefreshEnabled = false;
+
+        // Load logs on page load
+        loadLogs();
+        checkServerStatus();
+
+        // Handle line count change
+        document.getElementById('logLines').addEventListener('change', loadLogs);
+
+        async function loadLogs() {
+            const container = document.getElementById('logsContainer');
+            const lines = document.getElementById('logLines').value;
+            
+            container.innerHTML = '<p class="text-muted">Loading logs...</p>';
+
+            try {
+                const response = await fetch(`/api/logs?lines=${lines}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    if (!data.logs || data.logs.trim() === '') {
+                        container.innerHTML = '<p class="text-muted">No logs available</p>';
+                    } else {
+                        // Format logs with line numbers and syntax highlighting
+                        const logLines = data.logs.split('\n');
+                        const formattedLogs = logLines.map((line, index) => {
+                            let className = 'log-line';
+                            
+                            // Add coloring based on log level
+                            if (line.toLowerCase().includes('error')) {
+                                className += ' log-error';
+                            } else if (line.toLowerCase().includes('warn')) {
+                                className += ' log-warning';
+                            } else if (line.toLowerCase().includes('info')) {
+                                className += ' log-info';
+                            }
+                            
+                            return `<div class="${className}"><span class="log-number">${index + 1}</span>${escapeHtml(line)}</div>`;
+                        }).join('');
+                        
+                        container.innerHTML = `<div class="logs-output">${formattedLogs}</div>`;
+                        
+                        // Auto-scroll to bottom
+                        container.scrollTop = container.scrollHeight;
+                    }
+                } else {
+                    container.innerHTML = `<p class="text-error">Error loading logs: ${data.error}</p>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<p class="text-error">Failed to load logs: ${error.message}</p>`;
+            }
+        }
+
+        function toggleAutoRefresh() {
+            autoRefreshEnabled = !autoRefreshEnabled;
+            const text = document.getElementById('autoRefreshText');
+            
+            if (autoRefreshEnabled) {
+                text.textContent = '⏸️ Stop Auto-Refresh';
+                autoRefreshInterval = setInterval(loadLogs, 5000); // Refresh every 5 seconds
+                showToast('Auto-refresh enabled (every 5 seconds)', 'success');
+            } else {
+                text.textContent = '▶️ Auto-Refresh';
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+                showToast('Auto-refresh disabled', 'info');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Clean up interval on page unload
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

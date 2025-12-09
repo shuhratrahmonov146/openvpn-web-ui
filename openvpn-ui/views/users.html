@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - OpenVPN UI</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>🔒 OpenVPN Management UI</h1>
+            </div>
+            <div class="nav-links">
+                <a href="/">Dashboard</a>
+                <a href="/users" class="active">Users</a>
+                <a href="/logs">Logs</a>
+                <a href="/logout" style="color: var(--danger-color);">🚪 Logout</a>
+            </div>
+            <div class="server-status">
+                <span class="status-label">Server:</span>
+                <span class="status-indicator" id="serverStatus">
+                    <span class="dot"></span>
+                    <span class="status-text">Checking...</span>
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section>
+            <h2>User Management</h2>
+            
+            <!-- Add User Card -->
+            <div class="card">
+                <h3>Add New User</h3>
+                <form id="addUserForm" class="form">
+                    <div class="form-group">
+                        <label for="username">Username:</label>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            placeholder="Enter username (alphanumeric only)"
+                            pattern="[a-zA-Z0-9-_]+"
+                            required
+                        >
+                        <small>Only letters, numbers, hyphens, and underscores allowed</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        ➕ Add User
+                    </button>
+                </form>
+            </div>
+
+            <!-- User List Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Existing Users</h3>
+                    <button class="btn btn-secondary btn-sm" onclick="loadUsers()">
+                        🔄 Refresh
+                    </button>
+                </div>
+                
+                <div id="userTableContainer">
+                    <p class="text-muted">Loading users...</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>OpenVPN Management UI | Built with Node.js & Express</p>
+        </div>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="../script.js"></script>
+    <script>
+        // Load users on page load
+        loadUsers();
+        checkServerStatus();
+
+        // Form submission
+        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            
+            if (!username) {
+                showToast('Username is required', 'error');
+                return;
+            }
+
+            showLoading('Creating user...');
+
+            try {
+                const response = await fetch('/api/users/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(`User ${username} created successfully`, 'success');
+                    document.getElementById('addUserForm').reset();
+                    loadUsers();
+                } else {
+                    showToast('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, 'error');
+            } finally {
+                hideLoading();
+            }
+        });
+
+        async function loadUsers() {
+            const container = document.getElementById('userTableContainer');
+            container.innerHTML = '<p class="text-muted">Loading users...</p>';
+
+            try {
+                const response = await fetch('/api/users');
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.users.length === 0) {
+                        container.innerHTML = '<p class="text-muted">No users found. Add your first user above.</p>';
+                    } else {
+                        container.innerHTML = `
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.users.map(user => `
+                                        <tr>
+                                            <td><strong>${user.name}</strong></td>
+                                            <td>
+                                                <span class="badge badge-${user.status === 'active' ? 'success' : 'error'}">
+                                                    ${user.status}
+                                                </span>
+                                            </td>
+                                            <td class="actions">
+                                                ${user.status === 'active' ? `
+                                                    <button class="btn btn-primary btn-sm" onclick="downloadConfig('${user.name}')">
+                                                        📥 Download
+                                                    </button>
+                                                    <button class="btn btn-danger btn-sm" onclick="revokeUser('${user.name}')">
+                                                        🚫 Revoke
+                                                    </button>
+                                                ` : `
+                                                    <span class="text-muted">Revoked</span>
+                                                `}
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                    }
+                } else {
+                    container.innerHTML = `<p class="text-error">Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                container.innerHTML = `<p class="text-error">Failed to load users: ${error.message}</p>`;
+            }
+        }
+
+        async function revokeUser(username) {
+            if (!confirm(`Are you sure you want to revoke user "${username}"? This action cannot be undone.`)) {
+                return;
+            }
+
+            showLoading('Revoking user...');
+
+            try {
+                const response = await fetch('/api/users/revoke', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(`User ${username} revoked successfully`, 'success');
+                    loadUsers();
+                } else {
+                    showToast('Error: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function downloadConfig(username) {
+            showToast(`Downloading configuration for ${username}...`, 'info');
+            window.location.href = `/api/users/download/${username}`;
+        }
+    </script>
+</body>
+</html>
