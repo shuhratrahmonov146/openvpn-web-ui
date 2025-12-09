@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Manager - OpenVPN Web UI</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <div class="navbar-brand">🔐 OpenVPN Web UI</div>
+            <div class="navbar-menu">
+                <a href="/dashboard.html">Dashboard</a>
+                <a href="/clients.html" class="active">Client Manager</a>
+                <a href="/logs.html">Logs</a>
+                <a href="#" onclick="logout(); return false;" style="color: var(--danger);">Logout</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <h2 style="color: white; margin-bottom: 2rem;">👥 Client Manager</h2>
+        
+        <!-- Create Client Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Create New Client</h3>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; align-items: end;">
+                <div class="form-group" style="flex: 1; margin: 0;">
+                    <label class="form-label" for="clientName">Client Name</label>
+                    <input 
+                        type="text" 
+                        id="clientName" 
+                        class="form-control" 
+                        placeholder="Enter client name (alphanumeric only)"
+                        pattern="[a-zA-Z0-9-_]+"
+                    >
+                </div>
+                <button onclick="createClient()" class="btn btn-success" id="createBtn">
+                    ➕ Create Client
+                </button>
+            </div>
+        </div>
+        
+        <!-- Clients List Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Existing Clients</h3>
+                <button onclick="loadClients()" class="btn btn-sm btn-secondary">
+                    🔄 Refresh
+                </button>
+            </div>
+            
+            <div id="clientsList">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create Client Modal -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Client Created Successfully</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div style="margin-bottom: 1.5rem;">
+                <p>Client <strong id="modalClientName"></strong> has been created successfully.</p>
+                <p style="color: var(--text-muted); margin-top: 0.5rem;">The .ovpn configuration file is ready for download.</p>
+            </div>
+            <div style="display: flex; gap: 1rem;">
+                <button onclick="downloadModalClient()" class="btn btn-primary" style="flex: 1;">
+                    📥 Download .ovpn
+                </button>
+                <button onclick="closeModal()" class="btn btn-secondary">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/js/common.js"></script>
+    <script>
+        // Check authentication
+        checkAuth();
+        
+        let currentModalClient = null;
+        
+        // Load clients list
+        async function loadClients() {
+            const clientsList = document.getElementById('clientsList');
+            clientsList.innerHTML = '<div class="spinner"></div>';
+            
+            try {
+                const response = await fetch('/api/clients');
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.clients.length === 0) {
+                        clientsList.innerHTML = '<p style="color: var(--text-muted); padding: 2rem; text-align: center;">No clients found. Create your first client above.</p>';
+                        return;
+                    }
+                    
+                    let html = `
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Client Name</th>
+                                    <th>Created Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    
+                    data.clients.forEach(client => {
+                        const statusClass = client.status === 'active' ? 'success' : 'danger';
+                        const actionsHtml = client.status === 'active' ? `
+                            <button onclick="downloadClient('${client.name}')" class="btn btn-sm btn-primary">
+                                📥 Download
+                            </button>
+                            <button onclick="revokeClient('${client.name}')" class="btn btn-sm btn-danger">
+                                🚫 Revoke
+                            </button>
+                        ` : `<span style="color: var(--text-muted);">Revoked</span>`;
+                        
+                        html += `
+                            <tr>
+                                <td><strong>${client.name}</strong></td>
+                                <td>${formatDate(client.createdDate)}</td>
+                                <td><span class="badge badge-${statusClass}">${client.status}</span></td>
+                                <td>${actionsHtml}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += '</tbody></table>';
+                    clientsList.innerHTML = html;
+                } else {
+                    clientsList.innerHTML = `<p style="color: var(--danger); padding: 2rem; text-align: center;">${data.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Failed to load clients:', error);
+                clientsList.innerHTML = '<p style="color: var(--danger); padding: 2rem; text-align: center;">Failed to load clients</p>';
+            }
+        }
+        
+        // Create new client
+        async function createClient() {
+            const clientName = document.getElementById('clientName').value.trim();
+            const createBtn = document.getElementById('createBtn');
+            
+            if (!clientName) {
+                showAlert('Please enter a client name', 'danger');
+                return;
+            }
+            
+            if (!/^[a-zA-Z0-9-_]+$/.test(clientName)) {
+                showAlert('Client name can only contain letters, numbers, hyphens, and underscores', 'danger');
+                return;
+            }
+            
+            showLoading(createBtn);
+            
+            try {
+                const response = await fetch('/api/clients/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ clientName })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    document.getElementById('clientName').value = '';
+                    
+                    // Show modal
+                    currentModalClient = data.clientName;
+                    document.getElementById('modalClientName').textContent = data.clientName;
+                    document.getElementById('createModal').classList.add('show');
+                    
+                    // Reload clients list
+                    loadClients();
+                } else {
+                    showAlert(data.error, 'danger');
+                }
+            } catch (error) {
+                console.error('Create client error:', error);
+                showAlert('Failed to create client', 'danger');
+            } finally {
+                hideLoading(createBtn);
+            }
+        }
+        
+        // Download client config
+        function downloadClient(clientName) {
+            showAlert(`Downloading ${clientName}.ovpn...`, 'info');
+            window.location.href = `/api/clients/download/${clientName}`;
+        }
+        
+        // Download from modal
+        function downloadModalClient() {
+            if (currentModalClient) {
+                downloadClient(currentModalClient);
+            }
+        }
+        
+        // Revoke client
+        async function revokeClient(clientName) {
+            if (!confirmAction(`Are you sure you want to revoke client "${clientName}"? This action cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/clients/revoke', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ clientName })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    loadClients();
+                } else {
+                    showAlert(data.error, 'danger');
+                }
+            } catch (error) {
+                console.error('Revoke client error:', error);
+                showAlert('Failed to revoke client', 'danger');
+            }
+        }
+        
+        // Close modal
+        function closeModal() {
+            document.getElementById('createModal').classList.remove('show');
+            currentModalClient = null;
+        }
+        
+        // Close modal on outside click
+        document.getElementById('createModal').addEventListener('click', (e) => {
+            if (e.target.id === 'createModal') {
+                closeModal();
+            }
+        });
+        
+        // Initial load
+        loadClients();
+        
+        // Enter key to create client
+        document.getElementById('clientName').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                createClient();
+            }
+        });
+    </script>
+</body>
+</html>

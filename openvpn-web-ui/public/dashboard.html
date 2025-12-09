@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - OpenVPN Web UI</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <div class="navbar-brand">🔐 OpenVPN Web UI</div>
+            <div class="navbar-menu">
+                <a href="/dashboard.html" class="active">Dashboard</a>
+                <a href="/clients.html">Client Manager</a>
+                <a href="/logs.html">Logs</a>
+                <a href="#" onclick="logout(); return false;" style="color: var(--danger);">Logout</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <h2 style="color: white; margin-bottom: 2rem;">📊 Dashboard</h2>
+        
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="publicIp">...</div>
+                <div class="stat-label">Public IP Address</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-value" id="localIp">...</div>
+                <div class="stat-label">Local IP Address</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-value" id="clientCount">...</div>
+                <div class="stat-label">Active Clients</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-value" id="serviceStatus">...</div>
+                <div class="stat-label">OpenVPN Status</div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Quick Actions</h3>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                <a href="/clients.html" class="btn btn-primary">
+                    👥 Manage Clients
+                </a>
+                <button onclick="refreshDashboard()" class="btn btn-secondary">
+                    🔄 Refresh Data
+                </button>
+                <a href="/logs.html" class="btn btn-secondary">
+                    📋 View Logs
+                </a>
+            </div>
+        </div>
+        
+        <!-- Recent Clients -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Recent Clients</h3>
+                <a href="/clients.html" class="btn btn-sm btn-primary">View All</a>
+            </div>
+            
+            <div id="recentClients">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/js/common.js"></script>
+    <script>
+        // Check authentication
+        checkAuth();
+        
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                // Load server status
+                const statusResponse = await fetch('/api/clients/server-status');
+                const statusData = await statusResponse.json();
+                
+                if (statusData.success) {
+                    document.getElementById('publicIp').textContent = statusData.status.publicIp || 'N/A';
+                    document.getElementById('localIp').textContent = statusData.status.localIp || 'N/A';
+                    
+                    const statusEl = document.getElementById('serviceStatus');
+                    if (statusData.status.isActive) {
+                        statusEl.textContent = '✓ Active';
+                        statusEl.style.color = 'var(--success)';
+                    } else {
+                        statusEl.textContent = '✗ Inactive';
+                        statusEl.style.color = 'var(--danger)';
+                    }
+                }
+                
+                // Load clients
+                const clientsResponse = await fetch('/api/clients');
+                const clientsData = await clientsResponse.json();
+                
+                if (clientsData.success) {
+                    const activeClients = clientsData.clients.filter(c => c.status === 'active');
+                    document.getElementById('clientCount').textContent = activeClients.length;
+                    
+                    // Show recent clients
+                    const recentClientsDiv = document.getElementById('recentClients');
+                    
+                    if (clientsData.clients.length === 0) {
+                        recentClientsDiv.innerHTML = '<p style="color: var(--text-muted);">No clients found. Create your first client in the Client Manager.</p>';
+                    } else {
+                        const recentClients = clientsData.clients.slice(-5).reverse();
+                        
+                        let html = '<table class="table"><thead><tr><th>Client Name</th><th>Created Date</th><th>Status</th></tr></thead><tbody>';
+                        
+                        recentClients.forEach(client => {
+                            const statusClass = client.status === 'active' ? 'success' : 'danger';
+                            html += `
+                                <tr>
+                                    <td><strong>${client.name}</strong></td>
+                                    <td>${formatDate(client.createdDate)}</td>
+                                    <td><span class="badge badge-${statusClass}">${client.status}</span></td>
+                                </tr>
+                            `;
+                        });
+                        
+                        html += '</tbody></table>';
+                        recentClientsDiv.innerHTML = html;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+                showAlert('Failed to load dashboard data', 'danger');
+            }
+        }
+        
+        function refreshDashboard() {
+            showAlert('Refreshing dashboard...', 'info');
+            loadDashboardData();
+        }
+        
+        // Initial load
+        loadDashboardData();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadDashboardData, 30000);
+    </script>
+</body>
+</html>

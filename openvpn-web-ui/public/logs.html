@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs - OpenVPN Web UI</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <div class="navbar-brand">🔐 OpenVPN Web UI</div>
+            <div class="navbar-menu">
+                <a href="/dashboard.html">Dashboard</a>
+                <a href="/clients.html">Client Manager</a>
+                <a href="/logs.html" class="active">Logs</a>
+                <a href="#" onclick="logout(); return false;" style="color: var(--danger);">Logout</a>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <h2 style="color: white; margin-bottom: 2rem;">📋 Application Logs</h2>
+        
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Last 200 Lines</h3>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button onclick="refreshLogs()" class="btn btn-sm btn-secondary" id="refreshBtn">
+                        🔄 Refresh
+                    </button>
+                    <button onclick="toggleAutoRefresh()" class="btn btn-sm btn-secondary" id="autoRefreshBtn">
+                        ⏸️ Auto-Refresh: OFF
+                    </button>
+                </div>
+            </div>
+            
+            <div id="logsDisplay" class="logs-display">
+                <div style="text-align: center; padding: 2rem;">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 1rem;">Loading logs...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <p style="color: var(--text-muted); margin: 0;">
+                <strong>Note:</strong> Logs are stored in <code>logs/app.log</code> and are automatically rotated when they reach 10MB.
+            </p>
+        </div>
+    </div>
+    
+    <script src="/js/common.js"></script>
+    <script>
+        // Check authentication
+        checkAuth();
+        
+        let autoRefreshInterval = null;
+        let isAutoRefreshEnabled = false;
+        
+        // Load logs
+        async function loadLogs() {
+            const logsDisplay = document.getElementById('logsDisplay');
+            
+            try {
+                const response = await fetch('/api/logs');
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (!data.logs || data.logs.trim() === '') {
+                        logsDisplay.innerHTML = '<p style="text-align: center; padding: 2rem;">No logs available</p>';
+                    } else {
+                        // Format logs with line numbers
+                        const logLines = data.logs.split('\n');
+                        let formattedLogs = '';
+                        
+                        logLines.forEach((line, index) => {
+                            if (line.trim()) {
+                                // Color code based on log level
+                                let color = '#f9fafb';
+                                if (line.includes('[ERROR]')) {
+                                    color = '#fca5a5';
+                                } else if (line.includes('[WARN]')) {
+                                    color = '#fcd34d';
+                                } else if (line.includes('[INFO]')) {
+                                    color = '#93c5fd';
+                                }
+                                
+                                formattedLogs += `<div style="color: ${color};">${escapeHtml(line)}</div>`;
+                            }
+                        });
+                        
+                        logsDisplay.innerHTML = formattedLogs || '<p style="text-align: center; padding: 2rem;">No logs available</p>';
+                        
+                        // Auto-scroll to bottom
+                        logsDisplay.scrollTop = logsDisplay.scrollHeight;
+                    }
+                } else {
+                    logsDisplay.innerHTML = `<p style="color: var(--danger); text-align: center; padding: 2rem;">Failed to load logs: ${data.error}</p>`;
+                }
+            } catch (error) {
+                console.error('Failed to load logs:', error);
+                logsDisplay.innerHTML = '<p style="color: var(--danger); text-align: center; padding: 2rem;">Failed to load logs</p>';
+            }
+        }
+        
+        // Refresh logs
+        function refreshLogs() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            showLoading(refreshBtn);
+            loadLogs().finally(() => {
+                setTimeout(() => hideLoading(refreshBtn), 500);
+            });
+        }
+        
+        // Toggle auto-refresh
+        function toggleAutoRefresh() {
+            isAutoRefreshEnabled = !isAutoRefreshEnabled;
+            const btn = document.getElementById('autoRefreshBtn');
+            
+            if (isAutoRefreshEnabled) {
+                btn.textContent = '⏸️ Auto-Refresh: ON';
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-success');
+                
+                // Refresh every 5 seconds
+                autoRefreshInterval = setInterval(loadLogs, 5000);
+                showAlert('Auto-refresh enabled (every 5 seconds)', 'success');
+            } else {
+                btn.textContent = '▶️ Auto-Refresh: OFF';
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-secondary');
+                
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+                showAlert('Auto-refresh disabled', 'info');
+            }
+        }
+        
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Initial load
+        loadLogs();
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>
