@@ -8,11 +8,17 @@ const config = require('../config');
 /**
  * Execute shell command as promise
  */
-function execCommand(command) {
+function execCommand(command, options = {}) {
   return new Promise((resolve, reject) => {
     logger.info(`Executing command: ${command}`);
     
-    exec(command, { maxBuffer: 1024 * 500 }, (error, stdout, stderr) => {
+    const execOptions = { 
+      maxBuffer: 1024 * 500,
+      cwd: options.cwd || config.EASYRSA_DIR,
+      ...options
+    };
+    
+    exec(command, execOptions, (error, stdout, stderr) => {
       if (error) {
         logger.error(`Command error: ${stderr || error.message}`);
         return reject(new Error(stderr || error.message));
@@ -50,19 +56,23 @@ router.get('/', async (req, res) => {
         const filePath = path.join(issuedDir, file);
         const stats = fs.statSync(filePath);
         
-        // Check if client is revoked
-        const revokedFile = path.join(config.PKI_DIR, 'revoked', 'certs_by_serial', '*.crt');
+        // Check if client is revoked by checking CRL index
         let isRevoked = false;
         
         try {
-          const revokedDir = path.join(config.PKI_DIR, 'revoked', 'certs_by_serial');
-          if (fs.existsSync(revokedDir)) {
-            const revokedFiles = fs.readdirSync(revokedDir);
-            // Simple check - in production, match by serial number
-            isRevoked = revokedFiles.length > 0;
+          const indexPath = path.join(config.PKI_DIR, 'index.txt');
+          if (fs.existsSync(indexPath)) {
+            const indexContent = fs.readFileSync(indexPath, 'utf8');
+            const lines = indexContent.split('\n');
+            for (const line of lines) {
+              if (line.includes(`/CN=${clientName}`) && line.startsWith('R')) {
+                isRevoked = true;
+                break;
+              }
+            }
           }
         } catch (err) {
-          // Ignore revoked check errors
+          logger.warn(`Failed to check revoked status for ${clientName}: ${err.message}`);
         }
         
         clients.push({
@@ -110,9 +120,18 @@ router.post('/create', async (req, res) => {
     
     logger.info(`Creating client: ${clientName}`);
     
+    // Check if client already exists
+    const certPath = path.join(config.PKI_DIR, 'issued', `${clientName}.crt`);
+    if (fs.existsSync(certPath)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Client ${clientName} already exists` 
+      });
+    }
+    
     // Step 1: Build client certificate
-    const buildCommand = `${config.EASYRSA_BUILD_CLIENT} ${clientName} nopass`;
-    await execCommand(buildCommand);
+    const buildCommand = `cd ${config.EASYRSA_DIR} && ${config.EASYRSA_BUILD_CLIENT} ${clientName} nopass`;
+    await execCommand(buildCommand, { cwd: config.EASYRSA_DIR });
     
     logger.info(`Client certificate created: ${clientName}`);
     
@@ -157,18 +176,27 @@ router.post('/revoke', async (req, res) => {
     
     logger.info(`Revoking client: ${clientName}`);
     
+    // Check if client exists
+    const certPath = path.join(config.PKI_DIR, 'issued', `${clientName}.crt`);
+    if (!fs.existsSync(certPath)) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `Client ${clientName} not found` 
+      });
+    }
+    
     // Step 1: Revoke certificate
-    const revokeCommand = `${config.EASYRSA_REVOKE} ${clientName}`;
+    const revokeCommand = `cd ${config.EASYRSA_DIR} && ${config.EASYRSA_REVOKE} ${clientName}`;
     try {
-      await execCommand(revokeCommand);
+      await execCommand(revokeCommand, { cwd: config.EASYRSA_DIR });
     } catch (error) {
       // May fail if already revoked, continue
       logger.warn(`Revoke command warning: ${error.message}`);
     }
     
     // Step 2: Generate new CRL
-    const crlCommand = config.EASYRSA_GEN_CRL;
-    await execCommand(crlCommand);
+    const crlCommand = `cd ${config.EASYRSA_DIR} && ${config.EASYRSA_GEN_CRL}`;
+    await execCommand(crlCommand, { cwd: config.EASYRSA_DIR });
     
     logger.info(`Client revoked and CRL regenerated: ${clientName}`);
     

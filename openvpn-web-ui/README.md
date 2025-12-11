@@ -1,4 +1,4 @@
-# OpenVPN Web UI - Professional Management Interface
+# 🔒 OpenVPN Web UI - Professional Management Interface
 
 A modern, professional web-based management interface for OpenVPN servers using EasyRSA. Built with Node.js, Express, and vanilla JavaScript.
 
@@ -11,16 +11,18 @@ A modern, professional web-based management interface for OpenVPN servers using 
 - **🎨 Modern UI** - Clean, responsive design that works on all devices
 - **🔄 Auto-Refresh** - Real-time updates for dashboard and logs
 - **📝 Comprehensive Logging** - Winston-based logging with rotation
+- **✅ Input Validation** - Prevents duplicate clients and validates all inputs
+- **🔍 Smart Status Detection** - Reads EasyRSA index to show revoked clients
 
 ## 📋 Requirements
 
-- **Ubuntu Server** (18.04 or higher)
+- **Ubuntu Server** (18.04 or higher) / Debian / Raspberry Pi OS
 - **Node.js** (14.x or higher)
 - **OpenVPN** installed and configured
-- **EasyRSA** installed
-- **sudo privileges** for the system user
+- **EasyRSA 3.x** installed and initialized
+- **sudo privileges** for the system user running the app
 
-## 🚀 Installation
+## 🚀 Quick Start Installation
 
 ### Step 1: Install Node.js
 
@@ -39,7 +41,7 @@ npm --version
 ```bash
 # Create directory
 sudo mkdir -p /opt/openvpn-web-ui
-sudo chown shuhrat:shuhrat /opt/openvpn-web-ui
+sudo chown $USER:$USER /opt/openvpn-web-ui
 
 # Copy project files to /opt/openvpn-web-ui
 # Or clone from repository
@@ -61,12 +63,13 @@ The application needs sudo access to run OpenVPN management commands. Configure 
 sudo visudo -f /etc/sudoers.d/openvpn-web-ui
 ```
 
-Add the following lines (replace `shuhrat` with your username):
+Add the following lines (replace `shuhrat` with your actual username):
 
 ```
-shuhrat ALL=(ALL) NOPASSWD: /usr/share/easy-rsa/easyrsa
-shuhrat ALL=(ALL) NOPASSWD: /usr/local/bin/easyrsa
-shuhrat ALL=(ALL) NOPASSWD: /usr/bin/ovpn_getclient
+shuhrat ALL=(ALL) NOPASSWD: /usr/share/easy-rsa/easyrsa *
+shuhrat ALL=(ALL) NOPASSWD: /usr/local/bin/easyrsa *
+shuhrat ALL=(ALL) NOPASSWD: /etc/openvpn/easy-rsa/easyrsa *
+shuhrat ALL=(ALL) NOPASSWD: /usr/bin/ovpn_getclient *
 shuhrat ALL=(ALL) NOPASSWD: /usr/sbin/openvpn*
 shuhrat ALL=(ALL) NOPASSWD: /bin/systemctl reload openvpn-server@server
 ```
@@ -80,6 +83,8 @@ sudo -l
 ```
 
 You should see the commands listed without requiring a password.
+
+⚠️ **IMPORTANT**: Make sure EasyRSA path in sudoers matches the path in `config.js`
 
 ### Step 5: Configure Application
 
@@ -343,6 +348,62 @@ which easyrsa
 sudo find /etc -name "pki" -type d
 ```
 
+### Error: "Failed to create client"
+
+**Possible causes:**
+1. **EasyRSA path incorrect** - Check `config.js` EASYRSA_DIR matches your installation
+2. **Client already exists** - The app now prevents duplicate clients
+3. **Sudo permissions missing** - Run: `sudo -l` to verify permissions
+
+**Solution:**
+```bash
+# Find easyrsa location
+which easyrsa
+# or
+find /etc /usr -name easyrsa 2>/dev/null
+
+# Update config.js with correct path
+# Common paths:
+# - /etc/openvpn/easy-rsa
+# - /usr/share/easy-rsa
+# - /opt/easy-rsa
+```
+
+### Error: "Command error" when creating client
+
+This usually means EasyRSA needs working directory context:
+
+**Fixed in latest version:** The app now automatically changes to EasyRSA directory before running commands.
+
+### Clients List Empty
+
+Check PKI directory exists and has certificates:
+
+```bash
+ls -la /etc/openvpn/server/easy-rsa/pki/issued/
+```
+
+If empty, you need to initialize EasyRSA first:
+
+```bash
+cd /etc/openvpn/easy-rsa
+sudo ./easyrsa init-pki
+sudo ./easyrsa build-ca nopass
+sudo ./easyrsa gen-dh
+sudo ./easyrsa build-server-full server nopass
+```
+
+### Revoked Clients Still Show as Active
+
+The app now reads EasyRSA's `index.txt` file to detect revoked clients accurately.
+
+If still incorrect, regenerate CRL:
+
+```bash
+cd /etc/openvpn/easy-rsa
+sudo ./easyrsa gen-crl
+```
+
 ### Port Already in Use
 
 Change port in `config.js` or kill process:
@@ -353,6 +414,27 @@ sudo lsof -i :3000
 
 # Kill process
 sudo kill -9 <PID>
+```
+
+### Login Issues
+
+- **Default credentials:**
+  - Username: `admin`
+  - Password: `hprogramist8060`
+
+- Change in `config.js`:
+  ```javascript
+  ADMIN_USERNAME: 'admin',
+  ADMIN_PASSWORD: 'your-secure-password'
+  ```
+
+### Logs Not Showing
+
+Check logs directory permissions:
+
+```bash
+sudo chown -R shuhrat:shuhrat /opt/openvpn-web-ui/logs
+sudo chmod 755 /opt/openvpn-web-ui/logs
 ```
 
 ## 📁 Project Structure
