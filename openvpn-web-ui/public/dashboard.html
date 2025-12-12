@@ -95,12 +95,15 @@
                     
                     const statusEl = document.getElementById('serviceStatus');
                     if (statusData.status.isActive) {
-                        statusEl.textContent = '✓ Active';
+                        statusEl.textContent = '✓ Online';
                         statusEl.style.color = 'var(--success)';
                     } else {
-                        statusEl.textContent = '✗ Inactive';
+                        statusEl.textContent = '✗ Offline';
                         statusEl.style.color = 'var(--danger)';
                     }
+                    
+                    // Show connected clients count
+                    document.getElementById('clientCount').textContent = statusData.status.connectedCount || 0;
                 }
                 
                 // Load clients
@@ -108,8 +111,6 @@
                 const clientsData = await clientsResponse.json();
                 
                 if (clientsData.success) {
-                    const activeClients = clientsData.clients.filter(c => c.status === 'active');
-                    document.getElementById('clientCount').textContent = activeClients.length;
                     
                     // Show recent clients
                     const recentClientsDiv = document.getElementById('recentClients');
@@ -150,8 +151,8 @@
         // Initial load
         loadDashboardData();
         
-        // Auto-refresh every 30 seconds
-        setInterval(loadDashboardData, 30000);
+        // Auto-refresh every 10 seconds
+        setInterval(loadDashboardData, 10000);
     </script>
 </body>
 </html>

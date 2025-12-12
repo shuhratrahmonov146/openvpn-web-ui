@@ -4,27 +4,26 @@ module.exports = {
   HOST: process.env.HOST || '0.0.0.0',
   
   // Admin Credentials
-  ADMIN_USERNAME: 'admin',
-  ADMIN_PASSWORD: 'hprogramist8060',
+  ADMIN_USERNAME: process.env.ADMIN_USERNAME || 'admin',
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || 'hprogramist8060',
   
   // Session Configuration
-  SESSION_SECRET: 'openvpn-web-ui-secret-change-in-production',
+  SESSION_SECRET: process.env.SESSION_SECRET || 'openvpn-web-ui-secret-change-in-production',
   SESSION_MAX_AGE: 24 * 60 * 60 * 1000, // 24 hours
   
   // System Configuration
-  SYSTEM_USER: 'shuhrat',
-  OPENVPN_CONFIG_DIR: '/etc/openvpn/server',
-  EASYRSA_DIR: '/etc/openvpn/easy-rsa',
-  PKI_DIR: '/etc/openvpn/server/easy-rsa/pki',
+  SYSTEM_USER: process.env.SYSTEM_USER || 'shuhrat',
+  OVPN_CONFIG_DIR: process.env.OVPN_CONFIG_DIR || '/home/shuhrat/ovpns',
   
-  // Commands
-  EASYRSA_BUILD_CLIENT: 'sudo easyrsa build-client-full',
-  EASYRSA_REVOKE: 'sudo easyrsa revoke',
-  EASYRSA_GEN_CRL: 'sudo easyrsa gen-crl',
-  OVPN_GETCLIENT: 'sudo ovpn_getclient',
+  // OpenVPN Service
+  OPENVPN_SERVICE: 'openvpn@server',
   
   // Logging
   LOG_DIR: './logs',
   LOG_FILE: 'app.log',
-  LOG_LEVEL: 'info'
+  LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+  
+  // Auto-refresh intervals (milliseconds)
+  DASHBOARD_REFRESH_INTERVAL: 10000, // 10 seconds
+  LOGS_REFRESH_INTERVAL: 5000 // 5 seconds
 };

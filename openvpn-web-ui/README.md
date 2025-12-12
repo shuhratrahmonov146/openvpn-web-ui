@@ -5,21 +5,47 @@ A modern, professional web-based management interface for OpenVPN servers using 
 ## 🎯 Features
 
 - **🔐 Secure Authentication** - Session-based login with username/password
-- **👥 Client Management** - Create, revoke, and download VPN client configurations
-- **📊 Dashboard** - Real-time server status, IP addresses, and client statistics
-- **📋 Logs Viewer** - View application logs with auto-refresh capability
+- **👥 Client Management** - Create, revoke, and download VPN client configurations via PiVPN
+- **📊 Dashboard** - Real-time server status, IP addresses, and connected client count
+- **📋 Logs Viewer** - View application logs with auto-refresh every 5 seconds
 - **🎨 Modern UI** - Clean, responsive design that works on all devices
-- **🔄 Auto-Refresh** - Real-time updates for dashboard and logs
+- **🔄 Auto-Refresh** - Dashboard updates every 10 seconds automatically
 - **📝 Comprehensive Logging** - Winston-based logging with rotation
-- **✅ Input Validation** - Prevents duplicate clients and validates all inputs
-- **🔍 Smart Status Detection** - Reads EasyRSA index to show revoked clients
+- **✅ Input Validation** - Prevents duplicate clients and validates all inputs (alphanumeric, -, _)
+- **🔍 Connected Clients** - Accurate real-time display of connected VPN users
+- **⚡ Non-Interactive** - All PiVPN commands run without prompts
+- **🛡️ Error Handling** - Graceful error messages for all operations
+- **🚀 Production Ready** - Complete with sudo configuration and service files
+
+## ⚡ Quick Start
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure sudo access (see BACKEND_SETUP.md)
+sudo visudo -f /etc/sudoers.d/openvpn-web-ui
+
+# 3. Verify setup
+chmod +x verify-backend.sh
+./verify-backend.sh
+
+# 4. Start server
+npm start
+
+# 5. Access UI
+# Open browser: http://localhost:3000
+# Login: admin / hprogramist8060
+```
+
+📘 **For complete setup instructions, see [BACKEND_SETUP.md](BACKEND_SETUP.md)**
 
 ## 📋 Requirements
 
-- **Ubuntu Server** (18.04 or higher) / Debian / Raspberry Pi OS
+- **Ubuntu Server** (18.04 or higher) / Debian / Raspberry Pi OS  
 - **Node.js** (14.x or higher)
-- **OpenVPN** installed and configured
-- **EasyRSA 3.x** installed and initialized
+- **PiVPN** installed and configured
+- **OpenVPN** service running (managed by PiVPN)
 - **sudo privileges** for the system user running the app
 
 ## 🚀 Quick Start Installation
